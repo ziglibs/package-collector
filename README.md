@@ -6,8 +6,8 @@ Collects packages from sevaral package indices and provides them to [zig.pm](htt
 
 The following package indices are polled by this tool:
 
-- [GitHub `zig-package`](https://github.com/topic/zig-package)
-- [GitHub `zig-library`](https://github.com/topic/zig-library)
+- [GitHub topic `zig-package`](https://github.com/topic/zig-package)
+- [GitHub topic `zig-library`](https://github.com/topic/zig-library)
 - [ziglibs/repository](https://github.com/ziglibs/repository)
 - [Astrolabe](https://astrolabe.pm/)
 - [Aquila.Red](https://aquila.red/)

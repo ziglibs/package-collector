@@ -27,10 +27,10 @@ type FetchConfig struct {
 func main() {
 
 	fetch_config := FetchConfig{
-		github:     false,
+		github:     true,
 		astrolabe:  true,
 		ziglibs:    true,
-		aquila_red: false,
+		aquila_red: true,
 	}
 
 	raw_packages := make([]Package, 0)
@@ -147,7 +147,46 @@ func main() {
 				},
 			})
 		}
+	}
 
+	if fetch_config.aquila_red {
+		log.Print("Fetching packages from aquila.red...")
+
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", "https://aquila.red/all/packages", nil)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		req.Header.Set("Accept", "application/json")
+		response, err := client.Do(req)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		bytes, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		var aquila_pkgs AquilaList
+		err = json.Unmarshal(bytes, &aquila_pkgs)
+
+		for _, pkg := range aquila_pkgs.List {
+			author := strings.Split(pkg.RemoteName, "/")[0]
+
+			link := new(string)
+			*link = fmt.Sprintf("https://aquila.red/%d/%s/%s", pkg.Remote, author, pkg.Name)
+			raw_packages = append(raw_packages, Package{
+				GitRepo:     fmt.Sprintf("https://github.com/%s", pkg.RemoteName),
+				DisplayName: pkg.Name,
+				Tags:        make([]string, 0),
+				Author:      author,
+				Source:      SRC_AQUILA,
+				Links: Links{
+					Aquila: link,
+				},
+			})
+		}
 	}
 
 	log.Printf("Collected %d source packages, merging...", len(raw_packages))
@@ -184,7 +223,12 @@ func main() {
 
 	log.Printf("Loaded %d packages, with %d packages merged.", len(packages), len(raw_packages)-len(packages))
 
-	final, err := json.Marshal(packages)
+	package_list := make([]Package, 0)
+	for _, pkg := range packages {
+		package_list = append(package_list, pkg)
+	}
+
+	final, err := json.Marshal(package_list)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -220,6 +264,9 @@ func loadGithubTopic(client *github.Client, raw_packages []Package, topic string
 				Tags:        filterAndSortTags(repo.Topics),
 				Author:      *repo.Owner.Login,
 				Source:      SRC_GITHUB,
+				Links: Links{
+					Github: repo.HTMLURL,
+				},
 			})
 		}
 
@@ -263,6 +310,7 @@ type Package struct {
 	Author      string   `json:"author"` // first come, first serve
 	Source      int      `json:"source"`
 	Links       Links    `json:"links"`
+	Description string   `json:"description"`
 }
 
 type Links struct {
@@ -327,4 +375,22 @@ type AstroPackage struct {
 	Tags        []string `json:"tags"`
 	// Deps        string `json:"deps"`
 	// BuildDeps   string `json:"build_deps"`
+}
+
+type AquilaList struct {
+	List []AquilaPkg `json:"list"`
+}
+
+type AquilaPkg struct {
+	Uuid          string `json:"uuid"`           // : "001ZFTQN5BK6P7235W2YY7TKP1",
+	Owner         string `json:"owner"`          // : "0015KMZ1NDDFP4WRWSVA31N0CD",
+	Name          string `json:"name"`           // : "pcre-8.45",
+	CreatedOn     string `json:"created_on"`     // : "Mon, 28 Feb 2022 02:04:49 UTC",
+	Remote        int    `json:"remote"`         // : 1,
+	RemoteId      string `json:"remote_id"`      // : "462170122",
+	RemoteName    string `json:"remote_name"`    // : "nektro/pcre-8.45",
+	Description   string `json:"description"`    // : "Perl Compatible Regular Expressions",
+	License       string `json:"license"`        // : "BSD-3-Clause",
+	LatestVersion string `json:"latest_version"` // : "v0.1",
+	StarCount     string `json:"star_count"`     // : 0
 }
