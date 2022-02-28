@@ -88,8 +88,10 @@ func main() {
 				Author:      pkg.Author,
 				Source:      SRC_ZIGLIBS,
 				Links: Links{
-					Github: &pkg.Git,
+					Github: heapify(pkg.Git),
 				},
+				Description: pkg.Description,
+				RootFile:    heapify(pkg.RootFile),
 			})
 
 			return nil
@@ -134,8 +136,6 @@ func main() {
 		err = json.Unmarshal(bytes, &astro_pkgs)
 
 		for _, pkg := range astro_pkgs {
-			link := new(string)
-			*link = fmt.Sprintf("https://astrolabe.pm/#/package/%s/%s/%s", pkg.User, pkg.Name, pkg.Version)
 			raw_packages = append(raw_packages, Package{
 				GitRepo:     pkg.SourceUrl,
 				DisplayName: pkg.Name,
@@ -143,8 +143,9 @@ func main() {
 				Author:      pkg.User,
 				Source:      SRC_ASTROLABE,
 				Links: Links{
-					Astrolabe: link,
+					Astrolabe: heapify(fmt.Sprintf("https://astrolabe.pm/#/package/%s/%s/%s", pkg.User, pkg.Name, pkg.Version)),
 				},
+				Description: pkg.Description,
 			})
 		}
 	}
@@ -174,8 +175,6 @@ func main() {
 		for _, pkg := range aquila_pkgs.List {
 			author := strings.Split(pkg.RemoteName, "/")[0]
 
-			link := new(string)
-			*link = fmt.Sprintf("https://aquila.red/%d/%s/%s", pkg.Remote, author, pkg.Name)
 			raw_packages = append(raw_packages, Package{
 				GitRepo:     fmt.Sprintf("https://github.com/%s", pkg.RemoteName),
 				DisplayName: pkg.Name,
@@ -183,8 +182,9 @@ func main() {
 				Author:      author,
 				Source:      SRC_AQUILA,
 				Links: Links{
-					Aquila: link,
+					Aquila: heapify(fmt.Sprintf("https://aquila.red/%d/%s/%s", pkg.Remote, author, pkg.Name)),
 				},
+				Description: pkg.Description,
 			})
 		}
 	}
@@ -267,6 +267,7 @@ func loadGithubTopic(client *github.Client, raw_packages []Package, topic string
 				Links: Links{
 					Github: repo.HTMLURL,
 				},
+				Description: repo.GetDescription(),
 			})
 		}
 
@@ -311,6 +312,7 @@ type Package struct {
 	Source      int      `json:"source"`
 	Links       Links    `json:"links"`
 	Description string   `json:"description"`
+	RootFile    *string  `json:"root_file"`
 }
 
 type Links struct {
@@ -393,4 +395,10 @@ type AquilaPkg struct {
 	License       string `json:"license"`        // : "BSD-3-Clause",
 	LatestVersion string `json:"latest_version"` // : "v0.1",
 	StarCount     string `json:"star_count"`     // : 0
+}
+
+func heapify(str string) *string {
+	ptr := new(string)
+	*ptr = str
+	return ptr
 }
