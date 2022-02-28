@@ -83,7 +83,7 @@ func main() {
 
 			raw_packages = append(raw_packages, Package{
 				GitRepo:     pkg.Git,
-				DisplayName: filepath.Base(path),
+				DisplayName: strings.TrimSuffix(filepath.Base(path), ".json"),
 				Tags:        filterAndSortTags(pkg.Tags),
 				Author:      pkg.Author,
 				Source:      SRC_ZIGLIBS,
@@ -201,7 +201,7 @@ func main() {
 
 		if stored.GitRepo != "" {
 			// log.Printf("duplicate repo: %s\n", stored.GitRepo)
-			stored.Tags = mergeTags(stored.Tags, pkg.Tags)
+			stored.Tags = append(stored.Tags, pkg.Tags...)
 			stored.Source |= pkg.Source // we got the package from several sources
 
 			if stored.Links.Aquila == nil {
@@ -225,6 +225,7 @@ func main() {
 
 	package_list := make([]Package, 0)
 	for _, pkg := range packages {
+		pkg.Tags = mergeTags(pkg.Tags)
 		package_list = append(package_list, pkg)
 	}
 
@@ -289,30 +290,33 @@ func uniqueGitPath(uri string) string {
 }
 
 func mergeTags(tags_list ...[]string) []string {
-	set := make(map[string]*bool)
+	set := make(map[string]bool)
 	res := make([]string, 0)
 
 	for _, tags := range tags_list {
 		for _, tag := range tags {
-			if set[tag] == nil {
+			if !set[tag] {
 				res = append(res, tag)
+				set[tag] = true
 			}
 		}
 	}
+
+	sort.Strings(res)
 
 	return res
 
 }
 
 type Package struct {
-	GitRepo     string   `json:"git"` // used for deduplication
+	Author      string   `json:"author"` // first come, first serve
 	DisplayName string   `json:"name"`
 	Tags        []string `json:"tags"`
-	Author      string   `json:"author"` // first come, first serve
+	GitRepo     string   `json:"git"` // used for deduplication
+	RootFile    *string  `json:"root_file"`
+	Description string   `json:"description"`
 	Source      int      `json:"source"`
 	Links       Links    `json:"links"`
-	Description string   `json:"description"`
-	RootFile    *string  `json:"root_file"`
 }
 
 type Links struct {
@@ -345,7 +349,6 @@ func filterAndSortTags(tags []string) []string {
 			res = append(res, tag)
 		}
 	}
-	sort.Strings(res)
 	return res
 }
 
