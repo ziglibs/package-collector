@@ -305,7 +305,6 @@ func mergeTags(tags_list ...[]string) []string {
 	sort.Strings(res)
 
 	return res
-
 }
 
 type Package struct {
