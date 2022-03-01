@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -26,17 +27,27 @@ type FetchConfig struct {
 
 func main() {
 
+	fetch_github := flag.Bool("github", true, "fetches from github")
+	fetch_astrolabe := flag.Bool("astrolabe", true, "fetches from astrolabe.pm")
+	fetch_ziglibs := flag.Bool("ziglibs", true, "fetches from ziglibs/repository")
+	fetch_aquila := flag.Bool("aquila", true, "fetches from aquila.red")
+
+	tags_file := flag.String("tags", "tags.json", "Output file for tags.")
+	pkgs_file := flag.String("packages", "packages.json", "Output file for packages.")
+
+	ziglibs_repo := flag.String("repository", "repository", "Defines the location of the ziglibs repository.")
+
+	flag.Parse()
+
 	fetch_config := FetchConfig{
-		github:     true,
-		astrolabe:  true,
-		ziglibs:    true,
-		aquila_red: true,
+		github:     *fetch_github,
+		astrolabe:  *fetch_astrolabe,
+		ziglibs:    *fetch_ziglibs,
+		aquila_red: *fetch_aquila,
 	}
 
-	raw_packages := make([]Package, 0)
-
 	if fetch_config.ziglibs {
-		log.Print("Fetching packages from ziglibs/repository...")
+		log.Print("Updating the ziglibs repository...")
 
 		git_executable, err := exec.LookPath("git")
 		if err != nil {
@@ -56,14 +67,20 @@ func main() {
 		_, err = (&exec.Cmd{
 			Path: git_executable,
 			Args: []string{"git", "pull"},
-			Dir:  "repository",
+			Dir:  *ziglibs_repo,
 		}).Output()
 
 		if err != nil {
 			log.Fatalln(err)
 		}
+	}
 
-		err = filepath.Walk("repository/packages", func(path string, info os.FileInfo, err error) error {
+	raw_packages := make([]Package, 0)
+
+	if fetch_config.ziglibs {
+		log.Print("Fetching packages from ziglibs/repository...")
+
+		err := filepath.Walk((*ziglibs_repo)+"/packages", func(path string, info os.FileInfo, err error) error {
 
 			if info.IsDir() {
 				return nil
@@ -229,12 +246,78 @@ func main() {
 		package_list = append(package_list, pkg)
 	}
 
-	final, err := json.Marshal(package_list)
+	sort.Slice(package_list, func(i, j int) bool {
+		return strings.ToLower(package_list[i].DisplayName) < strings.ToLower(package_list[j].DisplayName)
+	})
+
+	final, err := json.MarshalIndent(package_list, "", "  ")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	os.WriteFile("all-packages.json", final, 0666)
+	os.WriteFile(*pkgs_file, final, 0666)
+
+	all_tags := make(map[string]Tag, 0)
+
+	if fetch_config.ziglibs {
+		log.Print("Fetching tags from ziglibs/repository...")
+
+		err = filepath.Walk((*ziglibs_repo)+"/tags", func(path string, info os.FileInfo, err error) error {
+
+			if info.IsDir() {
+				return nil
+			}
+
+			// log.Printf("loading %s...\n", path)
+			bytes, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			var tag = ZigTagDef{}
+			err = json.Unmarshal(bytes, &tag)
+			if err != nil {
+				return err
+			}
+			name := strings.TrimSuffix(filepath.Base(path), ".json")
+			all_tags[name] = Tag{
+				Name:        name,
+				Description: tag.Description,
+			}
+
+			return nil
+		})
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
+	for _, pkg := range package_list {
+		for _, tag := range pkg.Tags {
+			if all_tags[tag].Name == "" {
+				all_tags[tag] = Tag{
+					Name:        tag,
+					Description: "",
+				}
+			}
+		}
+	}
+
+	tag_list := make([]Tag, 0)
+	for _, tag := range all_tags {
+		tag_list = append(tag_list, tag)
+	}
+
+	sort.Slice(tag_list, func(i, j int) bool {
+		return strings.ToLower(tag_list[i].Name) < strings.ToLower(tag_list[j].Name)
+	})
+
+	final_tags, err := json.MarshalIndent(tag_list, "", "  ")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	os.WriteFile(*tags_file, final_tags, 0666)
 }
 
 func loadGithubTopic(client *github.Client, raw_packages []Package, topic string) []Package {
@@ -403,4 +486,13 @@ func heapify(str string) *string {
 	ptr := new(string)
 	*ptr = str
 	return ptr
+}
+
+type Tag struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type ZigTagDef struct {
+	Description string `json:"description"`
 }
